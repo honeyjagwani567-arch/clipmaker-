@@ -1,0 +1,398 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClipMaker</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 20px;
+  background: #10131c;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  max-width: 650px;
+  margin: auto;
+}
+
+h1 {
+  color: #8b9cff;
+  text-align: center;
+}
+
+.subtitle {
+  text-align: center;
+  color: #aab1c5;
+}
+
+.card {
+  background: #1b2030;
+  padding: 20px;
+  border-radius: 16px;
+  margin-top: 18px;
+}
+
+input, button {
+  width: 100%;
+  padding: 13px;
+  margin-top: 10px;
+  border-radius: 9px;
+  border: none;
+  font-size: 15px;
+}
+
+input[type="number"] {
+  background: #30374b;
+  color: white;
+}
+
+input[type="file"] {
+  background: #30374b;
+  color: white;
+}
+
+video {
+  width: 100%;
+  margin-top: 15px;
+  border-radius: 10px;
+  background: black;
+  max-height: 350px;
+}
+
+button {
+  background: #667cff;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+.secondary {
+  background: #343c52;
+}
+
+label {
+  display: block;
+  margin-top: 15px;
+  color: #c5cbe0;
+}
+
+#status {
+  color: #a9b7ff;
+  margin-top: 15px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+a {
+  display: block;
+  background: #1b9b70;
+  padding: 14px;
+  text-align: center;
+  color: white;
+  border-radius: 9px;
+  margin-top: 15px;
+  text-decoration: none;
+}
+
+.hidden {
+  display: none;
+}
+
+.footer {
+  text-align: center;
+  color: #818ba5;
+  margin-top: 30px;
+  font-size: 12px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>✂ ClipMaker</h1>
+<p class="subtitle">Turn long videos into short clips.</p>
+
+<div class="card">
+  <h3>1. Upload your video</h3>
+  <input type="file" id="file" accept="video/*">
+
+  <video id="video" controls playsinline></video>
+  <p id="duration">No video selected</p>
+</div>
+
+<div class="card">
+  <h3>2. Select your clip</h3>
+
+  <label>Start time (seconds)</label>
+  <input type="number" id="start" min="0" value="0" step="0.1">
+
+  <label>End time (seconds)</label>
+  <input type="number" id="end" min="0" value="10" step="0.1">
+
+  <button class="secondary" id="preview">Preview selection</button>
+</div>
+
+<div class="card">
+  <h3>3. Create your clip</h3>
+
+  <button id="export" disabled>✂ Export video clip</button>
+
+  <p id="status">Upload a video to begin.</p>
+
+  <a id="download" class="hidden" download="ClipMaker.webm">
+    Download your clip
+  </a>
+</div>
+
+<p class="footer">
+  ClipMaker V1 · Your videos stay on your device.
+</p>
+
+</div>
+
+<script>
+const fileInput = document.getElementById("file");
+const video = document.getElementById("video");
+const startInput = document.getElementById("start");
+const endInput = document.getElementById("end");
+const exportBtn = document.getElementById("export");
+const statusText = document.getElementById("status");
+const downloadLink = document.getElementById("download");
+
+let videoURL = null;
+let previewTimer = null;
+
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  if (videoURL) URL.revokeObjectURL(videoURL);
+
+  videoURL = URL.createObjectURL(file);
+  video.src = videoURL;
+  downloadLink.classList.add("hidden");
+  statusText.textContent = "Loading video...";
+});
+
+video.addEventListener("loadedmetadata", () => {
+  const duration = video.duration;
+
+  if (!Number.isFinite(duration)) {
+    statusText.textContent = "This video format is not supported.";
+    return;
+  }
+
+  startInput.max = duration;
+  endInput.max = duration;
+  endInput.value = Math.min(10, duration).toFixed(1);
+
+  document.getElementById("duration").textContent =
+    "Video duration: " + duration.toFixed(1) + " seconds";
+
+  exportBtn.disabled = false;
+  statusText.textContent = "Video ready!";
+});
+
+document.getElementById("preview").addEventListener("click", async () => {
+  const start = Number(startInput.value);
+  const end = Number(endInput.value);
+
+  if (!validRange(start, end)) return;
+
+  clearInterval(previewTimer);
+  video.currentTime = start;
+
+  try {
+    await video.play();
+
+    previewTimer = setInterval(() => {
+      if (video.currentTime >= end) {
+        video.pause();
+        clearInterval(previewTimer);
+      }
+    }, 100);
+  } catch (error) {
+    statusText.textContent = "Unable to play this video.";
+  }
+});
+
+function validRange(start, end) {
+  if (!video.duration || !Number.isFinite(video.duration)) {
+    statusText.textContent = "Upload a video first.";
+    return false;
+  }
+
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    start < 0 ||
+    end > video.duration ||
+    end <= start
+  ) {
+    statusText.textContent = "Please enter valid start and end times.";
+    return false;
+  }
+
+  return true;
+}
+
+exportBtn.addEventListener("click", async () => {
+  const start = Number(startInput.value);
+  const end = Number(endInput.value);
+
+  if (!validRange(start, end)) return;
+
+  if (
+    !video.captureStream ||
+    !window.MediaRecorder
+  ) {
+    statusText.textContent =
+      "Your browser does not support video recording. Try Chrome.";
+    return;
+  }
+
+  exportBtn.disabled = true;
+  downloadLink.classList.add("hidden");
+  statusText.textContent = "Preparing your clip...";
+
+  let recorder;
+  let chunks = [];
+  let stream;
+  let finished = false;
+
+  function cleanup() {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    exportBtn.disabled = false;
+  }
+
+  function finish() {
+    if (finished) return;
+    finished = true;
+
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  }
+
+  try {
+    video.pause();
+    video.currentTime = start;
+
+    await new Promise((resolve, reject) => {
+      const ready = () => {
+        cleanupListeners();
+        resolve();
+      };
+
+      const failed = () => {
+        cleanupListeners();
+        reject(new Error("Video seek failed."));
+      };
+
+      const cleanupListeners = () => {
+        video.removeEventListener("seeked", ready);
+        video.removeEventListener("error", failed);
+      };
+
+      video.addEventListener("seeked", ready);
+      video.addEventListener("error", failed);
+
+      video.currentTime = start;
+
+      if (Math.abs(video.currentTime - start) < 0.01) {
+        ready();
+      }
+    });
+
+    stream = video.captureStream();
+
+    if (!stream.getVideoTracks().length) {
+      throw new Error("Could not capture the video.");
+    }
+
+    let mime = "";
+
+    if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")) {
+      mime = "video/webm;codecs=vp9,opus";
+    } else if (MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")) {
+      mime = "video/webm;codecs=vp8,opus";
+    } else if (MediaRecorder.isTypeSupported("video/webm")) {
+      mime = "video/webm";
+    } else {
+      throw new Error("WebM recording is not supported.");
+    }
+
+    recorder = new MediaRecorder(stream, { mimeType: mime });
+
+    recorder.ondataavailable = event => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+
+    recorder.onstop = () => {
+      if (!chunks.length) {
+        statusText.textContent = "No clip was recorded.";
+        cleanup();
+        return;
+      }
+
+      const blob = new Blob(chunks, { type: mime });
+      const url = URL.createObjectURL(blob);
+
+      downloadLink.href = url;
+      downloadLink.download = "ClipMaker.webm";
+      downloadLink.classList.remove("hidden");
+
+      statusText.textContent =
+        "Your clip is ready! Size: " +
+        (blob.size / (1024 * 1024)).toFixed(2) + " MB";
+
+      cleanup();
+    };
+
+    recorder.onerror = () => {
+      statusText.textContent = "Recording failed. Try a shorter clip.";
+      cleanup();
+    };
+
+    recorder.start(250);
+
+    await video.play();
+
+    statusText.textContent = "Recording your selected clip...";
+
+    const checkEnd = () => {
+      if (video.currentTime >= end || video.ended) {
+        video.pause();
+        finish();
+        return;
+      }
+      if (!finished) requestAnimationFrame(checkEnd);
+    };
+
+    requestAnimationFrame(checkEnd);
+
+  } catch (error) {
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    statusText.textContent = error.message || "Something went wrong.";
+    cleanup();
+  }
+});
+</script>
+</body>
+</html>
